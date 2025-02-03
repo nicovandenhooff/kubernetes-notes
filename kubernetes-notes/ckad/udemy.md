@@ -210,3 +210,150 @@ data:
 $ echo 'YWRtaW4=' | base64 --decode
 admin
 ```
+
+### Security Contexts
+
+- A `SecurityContext` defines privilege and access control settings for a Pod or Container.
+- A `SecurityContext` is a property of the Pod or Container spec (i.e. it is defined at the Pod or Container level).
+
+#### Example `SecurityContext`
+
+- The following is an example of a `SecurityContext` defined at the Pod level (it's just an excerpt from a Pod definition):
+
+```yaml
+spec:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 3000
+    fsGroup: 2000
+    supplementalGroups: [4000]
+```
+
+### Service Accounts
+
+- A `ServiceAccount` is a type of non-human account that provides a distinct identity in a Kubernetes cluster.
+- Service Accounts provide a managed and secure way to grant pods their own identity, complete with credentials and controlled permissions, ensuring that interactions with the Kubernetes API are both authenticated and authorized according to the policies you define.
+- Service Accounts allow you to restrict a pod's access to only the necessary parts of the Kubernetes API.
+
+### Resource Requirements
+
+- You can specify the amount of CPU and memory that a container needs in a Pod definition.
+- The `kube-scheduler` uses the resource requirements to make decisions about which node to place a Pod on.
+- If a node does not have enough resources to meet the requirements of a Pod, the Pod will remain in a `Pending` state until the resources are available.
+- The resource requirements are defined in the `resources` section of a container definition.
+- The `resources` section contains two fields:
+  - `requests` are what the container is guaranteed to get.
+  - `limits` are the maximum amount of resources that a container can use.
+- In terms of memory, you will see an OOP (Out Of Memory) error if a container exceeds its memory limit.
+- In terms of CPU, the container will be throttled if it exceeds its CPU limit.
+- A `ResourceQuota` is a way to limit the resource consumption at the namespace level, and can be defined in a `ResourceQuota` object.
+
+#### Example resource requirements
+
+- The following is an example of resource requirements defined in a container definition:
+
+```yaml
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "250m"
+  limits:
+    memory: "128Mi"
+    cpu: "500m"
+```
+
+- The following is an example of a `ResourceQuota` object:
+
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: my-resource-quota
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "2"
+    limits.memory: 2Gi
+```
+
+### Node Selector
+
+- A `NodeSelector` is the most basic form of scheduling constraints in Kubernetes, and is a straightfoward mechanism where you match specific labels on nodes with labels on pods (only equality-based matching is supported).
+- It works by specifying a map of key-value pairs that must match the labels on a node for a pod to be scheduled on that node.
+- It is a hard requirement, meaning that if a node does not have the label that the pod requires, the pod will not be scheduled.
+- Node selectors are basic and inflexible, which is good for simple use cases - for more complex use cases, Node Affinity should be used.
+- A label is added to a node like:
+
+```bash
+kubectl label nodes <your-node-name> gpu=true
+```
+
+- A node selector is then defined in a pod definition like:
+
+```yaml
+nodeSelector:
+  gpu: "true"
+```
+
+### Node Affinity
+
+- Node affinity is similar to node selectors, but it allows for more complex scheduling requirements.
+- There are two types of node affinity:
+  1. `RequiredDuringSchedulingIgnoredDuringExecution`: These are hard requirements that must be met for a pod to be scheduled on a node.
+  2. `PreferredDuringSchedulingIgnoredDuringExecution`: These are soft requirements that will try to be met, but are not required.
+- Node affinity is defined in a pod definition like:
+
+```yaml
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: "disktype"
+                operator: In
+                values:
+                  - ssd
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: "zone"
+                operator: In
+                values:
+                  - us-east-1a
+```
+
+- This pod must be scheduled on a node with the label `disktype=ssd`, and it prefers to be scheduled on a node with the label `zone=us-east-1a`.
+
+### Taints and Tolerations
+
+- Node affinity is a property of Pods that attracts them to a set of nodes (either as a preference or a hard requirement).
+- Taints are the opposite - they allow a node to repel a set of pods.  In other words, if a node is tainted, only pods that can tolerate the taint will be scheduled on that node.
+- Tolerations are applied to pods, and allow the pods to schedule onto nodes with matching taints.
+- An example use case is a node with a GPU, where you only want pods that need the GPU to be scheduled on that node.
+- Taints are applied to nodes with `kubectl` like:
+
+```bash
+kubectl taint nodes node1 key=value:NoSchedule
+```
+
+- Tolerations are applied to pods in the pod definition like:
+
+```yaml
+tolerations:
+- key: "key"
+  operator: "Equal"
+  value: "value"
+  effect: "NoSchedule"
+```
+
+#### Example use case combining node affinity, taints, and tolerations
+
+For a ML use case where you have pods that require a node with a GPU:
+
+1. Create a dedicated GPU node pool.
+2. Label these nodes appropriately.
+3. Schedule GPU pods using node affinity (i.e. the pods can only be scheduled on nodes with GPUs).
+4. Use taints and tolerations to reserve the node(s) with GPUs exclusively for GPU workloads (i.e. only pods that need/tolerate a GPU will be scheduled on these nodes).
