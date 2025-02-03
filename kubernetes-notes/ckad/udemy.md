@@ -23,6 +23,8 @@
     1. Sidecar: A sidecar container extends and enhances the main container (e.g. log server alongside a web server).  Side cars are implemented as a special case of `initContainer`s.
     2. Adapter: An adapter container standardizes and normalizes the output of the main container (e.g. adaptor to process logs).
     3. Ambassador: An ambassador container abstracts the network for the main container (e.g. proxy container).
+- Environment variables are defined in the `env` section of a container definition, as a YAML list of key-value (`name` and `value`) pairs, but can also be defined as a `ConfigMap` or `secret`.
+- Commands and arguments are defined in the `command` and `args` sections of a container definition, respectively and relate to the `ENTRYPOINT` and `CMD` instructions in a Dockerfile.
 
 #### Example `kubectl` commands
 
@@ -131,4 +133,80 @@ kubectl get pods --namespace=my-namespace
 
 # get pods in all namespaces
 kubectl get pods --all-namespaces
+```
+
+## Configuration
+
+### ConfigMaps
+
+- A `ConfigMap` is a Kubernetes resource that allows you to decouple non-confidential configuration data from image content to keep containerized applications portable.
+- There are four ways you can use a `ConfigMap` to configure a container in a Pod:
+  1. As a command-line argument.
+  2. As environment variables.
+  3. As a configuration file in a read-only volume.
+  4. Write code to run inside the Pod that uses the Kubernetes API to read a `ConfigMap`.
+
+#### Example `ConfigMap`
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: game-demo
+data:
+  # property-like keys; each key maps to a simple value
+  player_initial_lives: "3"
+  ui_properties_file_name: "user-interface.properties"
+
+  # file-like keys
+  game.properties: |
+    enemy.types=aliens,monsters
+    player.maximum-lives=5
+  user-interface.properties: |
+    color.good=purple
+    color.bad=yellow
+    allow.textmode=true
+```
+
+### Secrets
+
+- `Secret`s are similar to ConfigMaps but are used to store sensitive information.
+- It is important to note that Secrets are not encrypted by default, and only use base64 encoding to encode the data.
+- Example use cases for Secrets include:
+  - Set environment variables in a container.
+  - Pull an image from a private registry.
+  - Provide credentials (e.g. ssh keys) to a Pod.
+
+#### Example `Secret`
+
+- The data in a `Secret` must be base64 encoded.
+- You can do this by calling `echo -n <value> | base64` in the terminal.
+- For example:
+
+```bash
+$ echo -n 'admin' | base64
+YWRtaW4=
+
+$ echo -n '1f2d1e2e67df' | base64
+MWYyZDFlMmU2N2Rm
+```
+
+- The `Secret` definition would look like this:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysecret
+type: Opaque
+data:
+  username: YWRtaW4=
+  password: MWYyZDFlMmU2N2Rm
+```
+
+- To decode the base64 encoded data, you can use the `base64` command:
+
+```bash
+$ echo 'YWRtaW4=' | base64 --decode
+admin
 ```
